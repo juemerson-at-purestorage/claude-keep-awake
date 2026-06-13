@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "powershell.exe -NoProfile -WindowStyle Hidden -File \"${CLAUDE_PLUGIN_ROOT}\\scripts\\windows\\block-sleep.ps1\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "powershell.exe -NoProfile -WindowStyle Hidden -File \"${CLAUDE_PLUGIN_ROOT}\\scripts\\windows\\unblock-sleep.ps1\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "powershell",
+            "command": "powershell.exe -NoProfile -WindowStyle Hidden -File \"${CLAUDE_PLUGIN_ROOT}\\scripts\\windows\\unblock-sleep.ps1\""
+          }
+        ]
+      }
+    ]
+  }
+}

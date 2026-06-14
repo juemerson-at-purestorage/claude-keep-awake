@@ -13,7 +13,9 @@ $lockPath  = Get-LockPath $sessionId
 if (Test-Path -LiteralPath $lockPath) {
     $pidLine   = Get-Content -LiteralPath $lockPath -ErrorAction SilentlyContinue | Select-Object -First 1
     $workerPid = 0
-    if ([int]::TryParse($pidLine, [ref]$workerPid) -and $workerPid -gt 0) {
+    # Only kill if the PID is verifiably OUR worker for THIS session -- guards against a
+    # reused PID that now belongs to an unrelated process. Either way the lock is removed.
+    if ([int]::TryParse($pidLine, [ref]$workerPid) -and (Test-IsOurWorker -ProcessId $workerPid -SessionId $sessionId)) {
         Stop-Process -Id $workerPid -Force -ErrorAction SilentlyContinue
     }
     Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue

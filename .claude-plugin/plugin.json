@@ -1,8 +1,24 @@
 {
   "name": "keep-awake",
   "description": "Keeps your computer awake while Claude Code is working, and releases when the turn ends. Scoped per session, so it is safe with multiple Claude windows open.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": { "name": "Justin Emerson" },
   "license": "Apache-2.0",
-  "keywords": ["windows", "power", "sleep", "keep-awake", "hooks"]
+  "keywords": ["windows", "power", "sleep", "keep-awake", "hooks"],
+  "userConfig": {
+    "keep_display_on": {
+      "type": "boolean",
+      "title": "Keep the display on too",
+      "description": "Also keep the monitor lit while Claude works, not just the system awake. Does NOT prevent the lock screen. Default: off (the screen may still dim/turn off).",
+      "default": false
+    },
+    "max_lifetime_hours": {
+      "type": "number",
+      "title": "Max keep-awake hours (safety backstop)",
+      "description": "Hard ceiling after which a worker self-releases, in case a session crashes without cleaning up. No normal turn approaches this. Range 1-24.",
+      "min": 1,
+      "max": 24,
+      "default": 8
+    }
+  }
 }

@@ -1,5 +1,5 @@
 ---
-description: Show whether Claude Code is currently blocking Windows from sleeping, and list active keep-awake workers.
+description: Show whether Claude Code is currently blocking your computer from sleeping, and list active keep-awake workers.
 ---
 
 Run the keep-awake diagnostic script and show its output to the user verbatim. Do not

@@ -1,15 +1,16 @@
 # keep-awake
 
-A [Claude Code](https://code.claude.com) plugin that keeps **Windows** from going to
+A [Claude Code](https://code.claude.com) plugin that keeps your **computer** from going to
 sleep while Claude is working, and lets it sleep normally again as soon as the turn ends.
 
 If you kick off a long task and walk away, your machine no longer dozes off mid-run. It is
 scoped per Claude session, so running several Claude windows at once is safe: one window
 finishing never lets another window's machine sleep.
 
-> **Platform:** Windows only today. The plugin is a no-op on macOS/Linux (the scripts
-> detect the OS and exit cleanly). The layout is structured so other platforms can be
-> added — see [Contributing](#contributing--other-platforms).
+> **Platform support:** Windows is implemented today. macOS and Linux are not implemented
+> yet — there the plugin detects the OS and exits cleanly (a harmless no-op), so it is safe
+> to install anywhere. The layout and hook contract are structured so those platforms can
+> drop in — contributions welcome; see [Contributing](#contributing--other-platforms).
 
 ## How it works
 
@@ -65,7 +66,7 @@ ends.
 
 ## Limitations
 
-- Windows only (other platforms: clean no-op).
+- macOS and Linux are not implemented yet (clean no-op there) — contributions welcome.
 - A worker orphaned by a hard crash persists until the 8-hour backstop fires (the next
   prompt in any session also reaps it once its process is actually gone).
 - Blocks *system* sleep only; the display is still allowed to turn off.

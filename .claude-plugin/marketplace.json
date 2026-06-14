@@ -1,12 +1,12 @@
 {
   "name": "claude-keep-awake",
-  "description": "Keeps Windows awake while Claude Code is working, and releases when the turn ends.",
+  "description": "Keeps your computer awake while Claude Code is working, and releases when the turn ends.",
   "owner": { "name": "Justin Emerson" },
   "plugins": [
     {
       "name": "keep-awake",
       "source": "./",
-      "description": "Keeps Windows awake while Claude Code is working, and releases when the turn ends.",
+      "description": "Keeps your computer awake while Claude Code is working, and releases when the turn ends.",
       "version": "1.0.0"
     }
   ]

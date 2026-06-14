@@ -195,7 +195,7 @@ of these tools prevent the lock screen on any platform.
 npm test        # node --test over tests/node/  (pure, runs on any OS)
 ```
 
-Or directly: `node --test "tests/node/**/*.test.mjs"`.
+Or directly: `node --test` (auto-discovers the `tests/node/` suite).
 
 CI runs on every push and pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 

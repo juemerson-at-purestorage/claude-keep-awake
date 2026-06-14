@@ -81,7 +81,9 @@ jobs:
         with:
           node-version: '20'
       - name: Run tests
-        run: node --test "tests/node/**/*.test.mjs"
+        # No glob: `node --test` auto-discovers *.test.mjs from the cwd, which works on the
+        # Node 20 LTS used here (positional-glob support only landed in Node 21).
+        run: node --test
 
   # Lint the PowerShell that the dispatcher delivers via -EncodedCommand (the holder and the
   # status probe). No Pester lane anymore: the logic that used to live in PowerShell now lives

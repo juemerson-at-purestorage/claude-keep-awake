@@ -1,5 +1,7 @@
 # keep-awake
 
+[![CI](https://github.com/juemerson-at-purestorage/claude-keep-awake/actions/workflows/ci.yml/badge.svg)](https://github.com/juemerson-at-purestorage/claude-keep-awake/actions/workflows/ci.yml)
+
 A [Claude Code](https://code.claude.com) plugin that keeps your **computer** from going to
 sleep while Claude is working, and lets it sleep normally again as soon as the turn ends.
 
@@ -143,6 +145,44 @@ honored only by desktop environments that respect `logind` (GNOME/KDE), so `keep
 there is best-effort and may need an `xset s off` / `xdg-screensaver` fallback; and the
 Linux backend assumes `systemd-logind` (non-systemd setups need a different mechanism).
 None of these tools prevent the lock screen on any platform.
+
+## Development
+
+The repo keeps each platform's implementation and its tests in their own subtree, so adding
+a new OS never disturbs an existing one:
+
+```
+scripts/<os>/   implementation for that platform   (scripts/windows today)
+tests/<os>/     that platform's tests + lint config (tests/windows today)
+hooks/          platform-agnostic hook wiring
+.github/workflows/ci.yml   CI: neutral manifest checks + a per-OS lane
+```
+
+CI runs on every push and pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+- **Validate manifests** (platform-neutral): every `*.json` parses, and `plugin.json` /
+  `marketplace.json` agree on the plugin name and version.
+- **Windows scripts**: [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer)
+  lint over `scripts/` plus [Pester](https://pester.dev) unit tests over `tests/windows/`.
+
+Run the Windows checks locally (Windows PowerShell or PowerShell 7+):
+
+```powershell
+Install-Module Pester, PSScriptAnalyzer -Scope CurrentUser   # once
+
+# Lint
+Invoke-ScriptAnalyzer -Path scripts -Recurse -Settings tests/windows/PSScriptAnalyzerSettings.psd1
+
+# Unit tests
+Invoke-Pester -Path tests/windows -Output Detailed
+```
+
+The Pester suite covers the deterministic helpers in `_common.ps1` — option parsing
+(`ConvertTo-BoolFlag`, `ConvertTo-LifetimeHours`, `Get-PluginOption`) and the PID-reuse
+guard's negative paths. The process-spawning lifecycle is exercised by the manual
+verification flow under [Verify it works](#verify-it-works). A new platform should add a
+sibling `tests/<os>/` lane and a matching CI job (e.g. `shellcheck` + `bats` for a bash
+backend).
 
 ## License
 

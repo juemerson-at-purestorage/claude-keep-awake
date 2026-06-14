@@ -3,6 +3,26 @@
 All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Test + CI tooling (no runtime/behavior change, so the plugin version is unchanged):
+  - Pester unit tests (`tests/windows/`) for the deterministic `_common.ps1` helpers -
+    option parsing (`ConvertTo-BoolFlag`, `ConvertTo-LifetimeHours`, `Get-PluginOption`)
+    and the PID-reuse guard's negative paths.
+  - PSScriptAnalyzer lint with a project settings file
+    (`tests/windows/PSScriptAnalyzerSettings.psd1`).
+  - GitHub Actions CI (`.github/workflows/ci.yml`): a platform-neutral manifest-validation
+    job (JSON parse + plugin/marketplace version agreement) and a Windows job running the
+    lint and Pester suite.
+- README "Development" section and CI badge documenting the per-platform `scripts/<os>` +
+  `tests/<os>` layout and how to run the checks locally.
+
+### Changed
+- `Get-SessionId` now assigns an explicit empty-string fallback in its catch block instead
+  of swallowing errors silently (clearer intent; satisfies `PSAvoidUsingEmptyCatchBlock`).
+  Behavior is unchanged - unreadable/non-JSON stdin still falls back to the `default` session.
+
 ## [1.1.0] - 2026-06-13
 
 ### Added

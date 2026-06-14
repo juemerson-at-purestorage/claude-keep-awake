@@ -19,7 +19,11 @@ function Get-SessionId {
     try {
         $raw = [Console]::In.ReadToEnd()
         if ($raw) { $sessionId = [string]((ConvertFrom-Json $raw).session_id) }
-    } catch { }
+    } catch {
+        # Unreadable/!JSON stdin is expected (e.g. invoked outside a hook). Fall through to
+        # the 'default' fallback below rather than failing the hook.
+        $sessionId = ''
+    }
     if ([string]::IsNullOrWhiteSpace($sessionId)) { $sessionId = 'default' }
     # session_id is normally a UUID, but sanitize anyway so it is always a safe filename.
     return ($sessionId -replace '[^A-Za-z0-9._-]', '_')

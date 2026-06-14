@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Platform-neutral checks. These validate the plugin manifests (plain JSON) and apply to
+  # every future platform implementation, so they live outside the per-OS test lanes below.
+  manifests:
+    name: Validate manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JSON + version agreement
+        run: |
+          python3 - <<'PY'
+          import json, sys, glob
+
+          errors = []
+
+          # 1) Every *.json in the repo must parse.
+          for path in sorted(glob.glob("**/*.json", recursive=True)):
+              try:
+                  with open(path, encoding="utf-8") as f:
+                      json.load(f)
+              except Exception as e:  # noqa: BLE001
+                  errors.append(f"{path}: invalid JSON - {e}")
+
+          # 2) The plugin and marketplace manifests must agree on name + version.
+          with open(".claude-plugin/plugin.json", encoding="utf-8") as f:
+              plugin = json.load(f)
+          with open(".claude-plugin/marketplace.json", encoding="utf-8") as f:
+              market = json.load(f)
+
+          entry = next((p for p in market.get("plugins", []) if p.get("name") == plugin.get("name")), None)
+          if entry is None:
+              errors.append(f"marketplace.json has no plugin entry named '{plugin.get('name')}'")
+          elif entry.get("version") != plugin.get("version"):
+              errors.append(
+                  f"version mismatch: plugin.json={plugin.get('version')} "
+                  f"marketplace.json={entry.get('version')}"
+              )
+
+          if errors:
+              print("Manifest validation FAILED:")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+          print(f"Manifests OK (plugin '{plugin.get('name')}' v{plugin.get('version')}).")
+          PY
+
+  # Windows-specific lane: lint + unit-test the PowerShell implementation. A future
+  # macOS/Linux implementation would add a sibling job (e.g. shellcheck + bats) rather than
+  # bolting onto this one.
+  windows:
+    name: Windows scripts (lint + Pester)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tooling
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.5.0 -Force -SkipPublisherCheck -Scope CurrentUser
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $findings = Invoke-ScriptAnalyzer -Path scripts -Recurse `
+              -Settings tests/windows/PSScriptAnalyzerSettings.psd1
+          if ($findings) {
+              $findings | Format-Table -AutoSize Severity, RuleName, ScriptName, Line, Message
+              throw "PSScriptAnalyzer reported $($findings.Count) issue(s)."
+          }
+          Write-Host "PSScriptAnalyzer: clean."
+
+      - name: Pester
+        shell: pwsh
+        run: |
+          Import-Module Pester -MinimumVersion 5.5.0
+          $cfg = New-PesterConfiguration
+          $cfg.Run.Path = 'tests/windows'
+          $cfg.Run.Exit = $true
+          $cfg.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $cfg

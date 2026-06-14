@@ -16,7 +16,7 @@ jobs:
     name: Validate manifests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Validate JSON + version agreement
         run: |
           python3 - <<'PY'
@@ -62,7 +62,7 @@ jobs:
     name: Windows scripts (lint + Pester)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install tooling
         shell: pwsh

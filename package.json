@@ -1,0 +1,14 @@
+{
+  "name": "claude-keep-awake",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Cross-platform Node dispatcher for the claude-keep-awake Claude Code plugin.",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test \"tests/node/**/*.test.mjs\""
+  },
+  "license": "Apache-2.0"
+}

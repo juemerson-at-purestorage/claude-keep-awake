@@ -9,32 +9,71 @@ If you kick off a long task and walk away, your machine no longer dozes off mid-
 scoped per Claude session, so running several Claude windows at once is safe: one window
 finishing never lets another window's machine sleep.
 
-> **Platform support:** Windows is implemented today. macOS and Linux are not implemented
-> yet — there the plugin detects the OS and exits cleanly (a harmless no-op), so it is safe
-> to install anywhere. The layout and hook contract are structured so those platforms can
-> drop in — contributions welcome; see [Contributing](#contributing--other-platforms).
+## Platform support
 
-## How it works on Windows
+| Platform | Status | Mechanism |
+|----------|--------|-----------|
+| **Windows** | ✅ Implemented | `PowerSetRequest(PowerRequestSystemRequired)` held by a detached `powershell.exe` |
+| **WSL2** (on Windows) | ✅ Implemented | Delegates to the **Windows host** over interop (a keep-awake *inside* WSL2 can't stop the host sleeping) |
+| **macOS** | ⏳ Detected, no-op | Reserved for `caffeinate` — contributions welcome |
+| **Linux** (bare metal) | ⏳ Detected, no-op | Reserved for `systemd-inhibit` — contributions welcome |
 
-- On **`UserPromptSubmit`**, the plugin starts a small detached background *worker* tagged
-  with your `session_id`. The worker holds a Windows
-  [`PowerSetRequest`](https://learn.microsoft.com/windows/win32/api/winnt/ne-winnt-power_request_type)
-  of type `PowerRequestSystemRequired`, which blocks automatic system sleep while still
-  letting the monitor dim. (With [`keep_display_on`](#configuration) it also holds
-  `PowerRequestDisplayRequired`, so the monitor stays lit too.) Windows clears the request
-  automatically when the worker exits.
-- On **`Stop`** and **`SessionEnd`**, the plugin stops that session's worker.
-- Each worker records its PID in a per-session lock file under
-  `%TEMP%\claude-keep-awake\<session_id>.lock`. Stopping is done by reading the lock — no
-  fragile process-command-line matching.
+On macOS and bare-metal Linux the plugin detects the OS and exits cleanly (a harmless
+no-op), so it is safe to install anywhere.
+
+### Requirements
+
+**Node.js must be on your `PATH`.** Every hook runs through a single Node dispatcher
+(`scripts/dispatch.mjs`), which is what lets one plugin work across Windows, WSL2, macOS, and
+Linux. Node ships with npm installs of Claude Code; if you used the native installer without a
+separate Node, install it:
+
+- **Windows:** `winget install OpenJS.NodeJS`
+- **macOS:** `brew install node`
+- **Linux/WSL2:** your distro's package (e.g. `sudo apt install nodejs`)
+
+If Node isn't present the hooks simply don't run — a benign, non-blocking no-op — and your
+machine is never kept awake. (Need a pure-PowerShell, no-Node Windows build? Use the tagged
+**v1.1.0** release.)
+
+## How it works
+
+A single Node dispatcher backs every hook and branches per environment — no `shell` field, so
+the same `hooks.json` works everywhere:
+
+- On **`UserPromptSubmit`** → `node dispatch.mjs block`: detect the environment, then start a
+  detached, session-scoped *holder* that blocks idle system sleep.
+- On **`Stop`** and **`SessionEnd`** → `node dispatch.mjs unblock`: stop that session's holder.
+
+The dispatcher records each holder in a per-session JSON lock file
+(`<os-temp>/claude-keep-awake/<session_id>.lock`) and releases by the recorded PID.
+
+**Windows.** The holder is a detached `powershell.exe` (launched via `Start-Process`,
+delivered as an `-EncodedCommand`) holding a
+[`PowerSetRequest`](https://learn.microsoft.com/windows/win32/api/winnt/ne-winnt-power_request_type)
+of type `PowerRequestSystemRequired`, which blocks automatic system sleep while still letting
+the monitor dim. With [`keep_display_on`](#configuration) it also holds
+`PowerRequestDisplayRequired`. Windows clears the request automatically when the holder exits.
+
+**WSL2.** A keep-awake running *inside* WSL2 can't help — when Windows sleeps it suspends the
+entire WSL2 VM, and `systemd-inhibit` inside the VM is useless. So the dispatcher delegates to
+the **Windows host**: over [interop](https://learn.microsoft.com/windows/wsl/interop) it launches
+the *same* `powershell.exe` holder on the host, captures the host's real PID, and on unblock
+terminates it by PID (`Stop-Process` over interop). If interop is disabled, it degrades to a
+benign no-op.
 
 ### Robustness
 
-- **Idempotent:** re-prompting in a session that already has a worker just refreshes the
-  lock; it never stacks duplicate workers.
-- **Stale-lock reaping:** each prompt sweeps lock files whose recorded process is gone.
+- **Idempotent:** re-prompting in a session that already has a live holder just refreshes the
+  lock; it never stacks duplicate holders.
+- **Stale-lock reaping:** each `block` sweeps lock files whose recorded process is gone.
+- **PID-reuse-safe release:** the holder's start time is captured at launch and `unblock` only
+  terminates the PID if its live start time still matches — so a recycled PID belonging to an
+  unrelated process is never signalled.
 - **Max-lifetime backstop:** if a session crashes without firing `Stop`/`SessionEnd`, its
-  worker self-releases after a hard ceiling (8 hours) instead of surviving until reboot.
+  holder self-releases after a hard ceiling (default 8 hours) instead of surviving until reboot.
+- **Hooks never block Claude:** the dispatcher wraps everything and always exits 0; a missing
+  `node`/`powershell.exe`, disabled interop, or an unsupported OS all degrade to a no-op.
 
 ### When your machine sleeps vs. stays awake
 
@@ -42,7 +81,7 @@ The block is held only while a turn is actively running:
 
 - **Claude is working** (thinking, running commands, including long-running commands and
   subagents) — the system stays awake.
-- **The turn finishes and Claude is waiting for your next prompt** — the worker is released
+- **The turn finishes and Claude is waiting for your next prompt** — the holder is released
   (on `Stop`), so your machine sleeps normally. Nothing to do; this is automatic, so walking
   away after Claude is done does *not* keep the machine up.
 - **Claude is paused mid-turn waiting for you to approve a permission prompt** — the machine
@@ -63,8 +102,8 @@ The block is held only while a turn is actively running:
 > The repository is both the plugin and its own marketplace, so a single
 > `marketplace add` is enough.
 
-Restart Claude Code (or reload) so the hooks register. Nothing else to configure — there
-are no paths to set up.
+Make sure [Node.js is installed](#requirements), then restart Claude Code (or reload) so the
+hooks register. Nothing else to configure — there are no paths to set up.
 
 ## Configuration
 
@@ -74,7 +113,7 @@ when you enable the plugin and stores them in your `settings.json` under `plugin
 | Option | Default | What it does |
 |--------|---------|--------------|
 | **Keep the display on too** (`keep_display_on`) | off | Also keeps the monitor lit while Claude works, not just the system awake. **Does not prevent the lock screen** (see below). |
-| **Max keep-awake hours** (`max_lifetime_hours`) | `8` | Safety backstop: a worker self-releases after this many hours (range 1–24) if a session ever crashes without cleaning up. No normal turn comes close. |
+| **Max keep-awake hours** (`max_lifetime_hours`) | `8` | Safety backstop: a holder self-releases after this many hours (range 1–24) if a session ever crashes without cleaning up. No normal turn comes close. |
 
 > **`keep_display_on` keeps the screen powered, not unlocked.** It prevents the monitor from
 > dimming/turning off on the power-idle timer, but it does **not** stop your screensaver or
@@ -89,7 +128,7 @@ directly.
 
 ## Verify it works
 
-Run the bundled diagnostic (no admin needed):
+Run the bundled status command (no admin needed):
 
 ```
 /keep-awake-status
@@ -97,92 +136,78 @@ Run the bundled diagnostic (no admin needed):
 
 or directly:
 
-```powershell
-powershell.exe -NoProfile -File "<plugin-root>\scripts\windows\check-keepawake.ps1"
+```
+node "<plugin-root>/scripts/dispatch.mjs" status
 ```
 
-It prints the live `SystemExecutionState`, a `System sleep blocked : True/False` verdict,
-and any active workers. The decisive test is differential — submit a prompt and you should
-see `0x...1` / `True` while Claude works, returning to `0x...0` / `False` after the turn
-ends.
+It reports the detected environment, a `System sleep blocked : True/False` verdict (the
+Windows **host** state on WSL2), whether the display is being kept on, and any active holders
+with their session id, platform, PID, and liveness. The decisive test is differential — submit
+a prompt and you should see `True` while Claude works, returning to `False` after the turn ends.
 
 ## Limitations
 
-- macOS and Linux are not implemented yet (clean no-op there) — contributions welcome.
-- A worker orphaned by a hard crash persists until the max-lifetime backstop fires (default
-  8 hours, configurable; the next prompt in any session also reaps it once its process is
-  actually gone).
+- macOS and bare-metal Linux are not implemented yet (clean no-op there) — contributions
+  welcome.
+- A holder orphaned by a hard crash persists until the max-lifetime backstop fires (default
+  8 hours, configurable; the next prompt in any session also reaps it once its process is gone).
 - Never prevents the **lock screen** — only system sleep and (optionally) display-off. See
   [Configuration](#configuration).
 - By default blocks *system* sleep only and lets the display turn off; set `keep_display_on`
   to keep the monitor lit as well.
+- Requires Node.js on `PATH` (see [Requirements](#requirements)).
 
-## Contributing — other platforms
+## Architecture & contributing
 
-The hook **contract** is platform-agnostic:
+Everything routes through the Node dispatcher; the decision logic is pure and unit-tested,
+and the side effects are concentrated in one file:
 
-- **In:** the hook JSON arrives on stdin and includes a stable `session_id`.
-- **Out:** on `UserPromptSubmit`, start a session-scoped keep-awake; on `Stop`/`SessionEnd`,
-  stop the one for that `session_id`.
+```
+scripts/
+  dispatch.mjs          universal entry: stdin → session id, detect env, run the lock model
+  lib/core.mjs          pure helpers: detection, option parsing, locks, holder/launcher, status
+  lib/dispatch-core.mjs orchestration: planHolder() + runDispatch() (dependency-injected)
+  windows/holder.ps1    the PowerSetRequest holder body (win32 + wsl, via -EncodedCommand)
+  windows/probe-state.ps1  the power-state probe used by `status`
+hooks/hooks.json        platform-agnostic hook wiring (node dispatch.mjs block|unblock)
+tests/node/             node --test unit suite for the dispatcher
+tests/windows/          PSScriptAnalyzer settings for the remaining PowerShell
+```
 
-A macOS implementation would wrap `caffeinate`; Linux would wrap `systemd-inhibit`. Drop
-them under `scripts/macos/` and `scripts/linux/` and route to the right one from
-`hooks/hooks.json` (e.g. via a small `pwsh` dispatcher, since PowerShell Core runs on all
-three platforms). The Windows scripts in `scripts/windows/` are the reference.
+**Adding macOS or Linux** is a focused change: teach `planHolder()` in
+`scripts/lib/dispatch-core.mjs` to return a holder for that environment instead of `null`, and
+have `dispatch.mjs` launch/terminate it. The two `userConfig` options map cleanly:
 
-The two `userConfig` options are deliberately platform-neutral and map cleanly, so a new
-backend should honor the same keys:
-
-| Concept | Windows | macOS | Linux |
-|---------|---------|-------|-------|
+| Concept | Windows / WSL2 | macOS | Linux |
+|---------|----------------|-------|-------|
 | Block system sleep (always) | `PowerRequestSystemRequired` | `caffeinate -i` | `systemd-inhibit --what=sleep` |
-| `keep_display_on` | `PowerRequestDisplayRequired` | `caffeinate -d` | `systemd-inhibit --what=idle` |
-| `max_lifetime_hours` backstop | worker loop | worker loop (or `caffeinate -t`) | worker loop |
+| `keep_display_on` | `PowerRequestDisplayRequired` | `caffeinate -d` | `systemd-inhibit --what=idle` (best-effort) |
+| `max_lifetime_hours` backstop | holder self-exit timer | `caffeinate -t` | holder `sleep` duration |
 
-Notes for those backends: `systemd-inhibit` has **no** timeout flag, so the worker-loop
-backstop is required for `max_lifetime_hours` parity on Linux; the Linux `idle` inhibitor is
-honored only by desktop environments that respect `logind` (GNOME/KDE), so `keep_display_on`
-there is best-effort and may need an `xset s off` / `xdg-screensaver` fallback; and the
-Linux backend assumes `systemd-logind` (non-systemd setups need a different mechanism).
-None of these tools prevent the lock screen on any platform.
+Notes for those backends: `systemd-inhibit` has **no** timeout flag, so a backstop duration is
+required for `max_lifetime_hours` parity; the Linux `idle` inhibitor is honored only by desktop
+environments that respect `logind` (GNOME/KDE), so `keep_display_on` there is best-effort. None
+of these tools prevent the lock screen on any platform.
 
 ## Development
 
-The repo keeps each platform's implementation and its tests in their own subtree, so adding
-a new OS never disturbs an existing one:
+```bash
+npm test        # node --test over tests/node/  (pure, runs on any OS)
+```
 
-```
-scripts/<os>/   implementation for that platform   (scripts/windows today)
-tests/<os>/     that platform's tests + lint config (tests/windows today)
-hooks/          platform-agnostic hook wiring
-.github/workflows/ci.yml   CI: neutral manifest checks + a per-OS lane
-```
+Or directly: `node --test "tests/node/**/*.test.mjs"`.
 
 CI runs on every push and pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
 
 - **Validate manifests** (platform-neutral): every `*.json` parses, and `plugin.json` /
-  `marketplace.json` agree on the plugin name and version.
-- **Windows scripts**: [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer)
-  lint over `scripts/` plus [Pester](https://pester.dev) unit tests over `tests/windows/`.
+  `marketplace.json` / `package.json` agree on the plugin name and version.
+- **Node dispatcher tests**: `node --test` on Ubuntu and Windows.
+- **Windows PowerShell lint**:
+  [PSScriptAnalyzer](https://github.com/PowerShell/PSScriptAnalyzer) over `scripts/`.
 
-Run the Windows checks locally (Windows PowerShell or PowerShell 7+):
-
-```powershell
-Install-Module Pester, PSScriptAnalyzer -Scope CurrentUser   # once
-
-# Lint
-Invoke-ScriptAnalyzer -Path scripts -Recurse -Settings tests/windows/PSScriptAnalyzerSettings.psd1
-
-# Unit tests
-Invoke-Pester -Path tests/windows -Output Detailed
-```
-
-The Pester suite covers the deterministic helpers in `_common.ps1` — option parsing
-(`ConvertTo-BoolFlag`, `ConvertTo-LifetimeHours`, `Get-PluginOption`) and the PID-reuse
-guard's negative paths. The process-spawning lifecycle is exercised by the manual
-verification flow under [Verify it works](#verify-it-works). A new platform should add a
-sibling `tests/<os>/` lane and a matching CI job (e.g. `shellcheck` + `bats` for a bash
-backend).
+The detached-holder *survival* across the hook process exiting is the one behavior that can
+only be confirmed by a real plugin run (test harnesses reap background processes); the rest of
+the lifecycle is covered by the Node suite and the [status](#verify-it-works) differential.
 
 ## License
 

@@ -6,8 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "powershell.exe -NoProfile -WindowStyle Hidden -File \"${CLAUDE_PLUGIN_ROOT}\\scripts\\windows\\block-sleep.ps1\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/dispatch.mjs\" block"
           }
         ]
       }
@@ -18,8 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "powershell.exe -NoProfile -WindowStyle Hidden -File \"${CLAUDE_PLUGIN_ROOT}\\scripts\\windows\\unblock-sleep.ps1\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/dispatch.mjs\" unblock"
           }
         ]
       }
@@ -30,8 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "powershell",
-            "command": "powershell.exe -NoProfile -WindowStyle Hidden -File \"${CLAUDE_PLUGIN_ROOT}\\scripts\\windows\\unblock-sleep.ps1\""
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/dispatch.mjs\" unblock"
           }
         ]
       }

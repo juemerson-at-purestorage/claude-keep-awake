@@ -12,7 +12,7 @@ finishing never lets another window's machine sleep.
 > to install anywhere. The layout and hook contract are structured so those platforms can
 > drop in — contributions welcome; see [Contributing](#contributing--other-platforms).
 
-## How it works
+## How it works on Windows
 
 - On **`UserPromptSubmit`**, the plugin starts a small detached background *worker* tagged
   with your `session_id`. The worker holds a Windows
@@ -35,12 +35,12 @@ finishing never lets another window's machine sleep.
 ## Install
 
 ```
-/plugin marketplace add github:<your-github-username>/claude-keep-awake
+/plugin marketplace add github:juemerson-at-purestorage/claude-keep-awake
 /plugin install keep-awake@claude-keep-awake
 ```
 
-> Replace `<your-github-username>` with wherever you host this repo. The repository is
-> both the plugin and its own marketplace, so a single `marketplace add` is enough.
+> The repository is both the plugin and its own marketplace, so a single
+> `marketplace add` is enough.
 
 Restart Claude Code (or reload) so the hooks register. Nothing else to configure — there
 are no paths to set up.

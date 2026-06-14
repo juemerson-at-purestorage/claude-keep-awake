@@ -1,13 +1,26 @@
 {
   "name": "claude-keep-awake",
   "description": "Keeps your computer awake while Claude Code is working, and releases when the turn ends.",
-  "owner": { "name": "Justin Emerson" },
+  "owner": {
+    "name": "Justin Emerson"
+  },
   "plugins": [
     {
       "name": "keep-awake",
+      "displayName": "Keep Awake",
       "source": "./",
-      "description": "Keeps your computer awake while Claude Code is working, and releases when the turn ends.",
-      "version": "1.1.0"
+      "description": "Keeps your computer awake while Claude Code is working, and releases when the turn ends. Scoped per session, so it is safe with multiple Claude windows open.",
+      "version": "1.1.0",
+      "author": {
+        "name": "Justin Emerson",
+        "url": "https://github.com/juemerson-at-purestorage"
+      },
+      "homepage": "https://github.com/juemerson-at-purestorage/claude-keep-awake",
+      "repository": "https://github.com/juemerson-at-purestorage/claude-keep-awake",
+      "license": "Apache-2.0",
+      "category": "productivity",
+      "keywords": ["claude-code", "windows", "powershell", "power", "sleep", "keep-awake", "do-not-sleep", "hooks", "caffeine"],
+      "tags": ["claude-code", "windows", "powershell", "keep-awake", "power-management"]
     }
   ]
 }

@@ -1,10 +1,17 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "keep-awake",
+  "displayName": "Keep Awake",
   "description": "Keeps your computer awake while Claude Code is working, and releases when the turn ends. Scoped per session, so it is safe with multiple Claude windows open.",
   "version": "1.1.0",
-  "author": { "name": "Justin Emerson" },
+  "author": {
+    "name": "Justin Emerson",
+    "url": "https://github.com/juemerson-at-purestorage"
+  },
+  "homepage": "https://github.com/juemerson-at-purestorage/claude-keep-awake",
+  "repository": "https://github.com/juemerson-at-purestorage/claude-keep-awake",
   "license": "Apache-2.0",
-  "keywords": ["windows", "power", "sleep", "keep-awake", "hooks"],
+  "keywords": ["claude-code", "windows", "powershell", "power", "sleep", "keep-awake", "do-not-sleep", "hooks", "caffeine"],
   "userConfig": {
     "keep_display_on": {
       "type": "boolean",

@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   # Platform-neutral checks. These validate the plugin manifests (plain JSON) and apply to
-  # every future platform implementation, so they live outside the per-OS test lanes below.
+  # every platform implementation, so they live outside the per-OS lanes below.
   manifests:
     name: Validate manifests
     runs-on: ubuntu-latest
@@ -26,6 +26,8 @@ jobs:
 
           # 1) Every *.json in the repo must parse.
           for path in sorted(glob.glob("**/*.json", recursive=True)):
+              if "node_modules" in path:
+                  continue
               try:
                   with open(path, encoding="utf-8") as f:
                       json.load(f)
@@ -47,6 +49,15 @@ jobs:
                   f"marketplace.json={entry.get('version')}"
               )
 
+          # 3) package.json (Node dispatcher) must agree on version too.
+          with open("package.json", encoding="utf-8") as f:
+              pkg = json.load(f)
+          if pkg.get("version") != plugin.get("version"):
+              errors.append(
+                  f"version mismatch: plugin.json={plugin.get('version')} "
+                  f"package.json={pkg.get('version')}"
+              )
+
           if errors:
               print("Manifest validation FAILED:")
               for e in errors:
@@ -55,20 +66,38 @@ jobs:
           print(f"Manifests OK (plugin '{plugin.get('name')}' v{plugin.get('version')}).")
           PY
 
-  # Windows-specific lane: lint + unit-test the PowerShell implementation. A future
-  # macOS/Linux implementation would add a sibling job (e.g. shellcheck + bats) rather than
-  # bolting onto this one.
+  # The dispatcher's logic is pure, dependency-injected JavaScript, so its unit tests run
+  # identically on every OS. Exercise both POSIX and Windows to catch path/separator surprises.
+  node:
+    name: Node dispatcher tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run tests
+        # No glob: `node --test` auto-discovers *.test.mjs from the cwd, which works on the
+        # Node 20 LTS used here (positional-glob support only landed in Node 21).
+        run: node --test
+
+  # Lint the PowerShell that the dispatcher delivers via -EncodedCommand (the holder and the
+  # status probe). No Pester lane anymore: the logic that used to live in PowerShell now lives
+  # in the Node dispatcher and is covered by the `node` job above.
   windows:
-    name: Windows scripts (lint + Pester)
+    name: Windows PowerShell lint
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
 
-      - name: Install tooling
+      - name: Install PSScriptAnalyzer
         shell: pwsh
         run: |
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          Install-Module Pester -MinimumVersion 5.5.0 -Force -SkipPublisherCheck -Scope CurrentUser
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
 
       - name: PSScriptAnalyzer
@@ -81,13 +110,3 @@ jobs:
               throw "PSScriptAnalyzer reported $($findings.Count) issue(s)."
           }
           Write-Host "PSScriptAnalyzer: clean."
-
-      - name: Pester
-        shell: pwsh
-        run: |
-          Import-Module Pester -MinimumVersion 5.5.0
-          $cfg = New-PesterConfiguration
-          $cfg.Run.Path = 'tests/windows'
-          $cfg.Run.Exit = $true
-          $cfg.Output.Verbosity = 'Detailed'
-          Invoke-Pester -Configuration $cfg

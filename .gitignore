@@ -1,3 +1,7 @@
+# Build artifacts / release archives
+/dist/
+node_modules/
+
 # OS / editor cruft
 Thumbs.db
 desktop.ini
